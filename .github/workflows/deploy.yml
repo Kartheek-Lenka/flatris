@@ -9,7 +9,7 @@ on:
 env:
   AWS_REGION: ap-south-1
   TF_VERSION: 1.6.0
-  NODE_VERSION: 16
+  NODE_VERSION: 14
 
 jobs:
   # ─────────────────────────────────────────
@@ -27,16 +27,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: 'yarn'
 
       - name: Install dependencies
-        run: npm install
+        run: yarn install
 
       - name: Run tests
-        run: npm test -- --watchAll=false --passWithNoTests
+        run: yarn test --watchAll=false --passWithNoTests
 
       - name: Build production bundle
-        run: npm run build
+        run: yarn build
         env:
           CI: false            # Prevent warnings from breaking the build
 
