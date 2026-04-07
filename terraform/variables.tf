@@ -1,11 +1,14 @@
 variable "aws_region" {
-  default = "ap-south-1"
+  description = "AWS region"
+  default     = "ap-south-1"
 }
 
-variable "key_name" {
-  description = "EC2 key pair"
+variable "project_name" {
+  description = "Project name tag"
+  default     = "flatris"
 }
 
-variable "github_repo" {
-  description = "yourusername/flatris"
+variable "key_pair_name" {
+  description = "Name of your AWS EC2 key pair for SSH access"
+  type        = string
 }
