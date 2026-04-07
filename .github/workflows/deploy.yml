@@ -1,0 +1,155 @@
+name: CI/CD — Build & Deploy Flatris to AWS
+
+on:
+  push:
+    branches: [main]          # Auto-deploy on every push to main
+  pull_request:
+    branches: [main]          # Run tests on PRs (but don't deploy)
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: 1.6.0
+  NODE_VERSION: 18
+
+jobs:
+  # ─────────────────────────────────────────
+  # JOB 1: Build & Test the React App
+  # ─────────────────────────────────────────
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test -- --watchAll=false --passWithNoTests
+
+      - name: Build production bundle
+        run: npm run build
+        env:
+          CI: false            # Prevent warnings from breaking the build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatris-build
+          path: build/
+          retention-days: 1
+
+  # ─────────────────────────────────────────
+  # JOB 2: Terraform — Provision AWS Infra
+  # ─────────────────────────────────────────
+  terraform:
+    name: Terraform Plan & Apply
+    runs-on: ubuntu-latest
+    needs: build               # Only runs after successful build
+    if: github.ref == 'refs/heads/main'   # Only on main branch
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform ${{ env.TF_VERSION }}
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+        
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
+
+      - name: Get Terraform Outputs
+        id: tf_outputs
+        run: |
+          echo "bucket=$(terraform output -raw s3_bucket_name)" >> $GITHUB_OUTPUT
+          echo "cf_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
+          echo "url=$(terraform output -raw cloudfront_url)" >> $GITHUB_OUTPUT
+
+    outputs:
+      bucket: ${{ steps.tf_outputs.outputs.bucket }}
+      cf_id: ${{ steps.tf_outputs.outputs.cf_id }}
+      game_url: ${{ steps.tf_outputs.outputs.url }}
+
+  # ─────────────────────────────────────────
+  # JOB 3: Deploy — Upload files to S3
+  # ─────────────────────────────────────────
+  deploy:
+    name: Deploy to S3 + Invalidate CloudFront
+    runs-on: ubuntu-latest
+    needs: terraform
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: flatris-build
+          path: build/
+
+      - name: Sync build files to S3
+        run: |
+          # Upload HTML with no-cache (always fresh)
+          aws s3 sync build/ s3://${{ needs.terraform.outputs.bucket }} \
+            --delete \
+            --exclude "*.js" \
+            --exclude "*.css" \
+            --cache-control "no-cache, no-store, must-revalidate"
+
+          # Upload JS/CSS with long-term caching (content-hashed filenames)
+          aws s3 sync build/ s3://${{ needs.terraform.outputs.bucket }} \
+            --delete \
+            --exclude "*.html" \
+            --cache-control "public, max-age=31536000, immutable"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ needs.terraform.outputs.cf_id }} \
+            --paths "/*"
+
+      - name: Print Live Game URL
+        run: |
+          echo "════════════════════════════════════════"
+          echo "  ✅ Flatris is LIVE!"
+          echo "  🎮 URL: ${{ needs.terraform.outputs.game_url }}"
+          echo "════════════════════════════════════════"
