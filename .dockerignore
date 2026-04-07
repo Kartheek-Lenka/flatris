@@ -1,0 +1,17 @@
+cat > .dockerignore << 'EOF'
+node_modules
+.git
+.github
+.next
+*.log
+.DS_Store
+.env
+.env.local
+.gitignore
+README.md
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.dockerignore
+Dockerfile
+EOF

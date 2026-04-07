@@ -1,8 +1,8 @@
-name: Deploy Flatris Game to AWS S3
+name: Deploy to EC2
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ master, main ]
   workflow_dispatch:
 
 jobs:
@@ -13,24 +13,38 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      
-      - name: Install dependencies
-        run: npm ci || npm install
-      
-      - name: Build the game
-        run: npm run build || echo "No build script found"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ap-south-1
       
-      - name: Deploy to S3
-        run: |
-          aws s3 sync ./ s3://${{ secrets.S3_BUCKET_NAME }} --delete --exclude ".git/*" --exclude ".github/*"
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: 271443695313.dkr.ecr.ap-south-1.amazonaws.com/flatris-game:latest
+      
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 271443695313.dkr.ecr.ap-south-1.amazonaws.com
+            docker pull 271443695313.dkr.ecr.ap-south-1.amazonaws.com/flatris-game:latest
+            docker stop flatris-game || true
+            docker rm flatris-game || true
+            docker run -d -p 80:3000 --name flatris-game 271443695313.dkr.ecr.ap-south-1.amazonaws.com/flatris-game:latest
+            docker image prune -f
+            echo "✅ Deployment complete!"
