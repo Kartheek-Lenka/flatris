@@ -15,7 +15,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: '12'
           cache: 'npm'
 
       - name: Install dependencies
@@ -32,7 +32,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
             # Install node 18 if not present
-            node -v || (curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - && sudo apt-get install -y nodejs)
+            node -v || (curl -fsSL https://deb.nodesource.com/setup_12.x | sudo -E bash - && sudo apt-get install -y nodejs)
             
             # Install pm2 globally
             pm2 -v || sudo npm install -g pm2
@@ -42,7 +42,7 @@ jobs:
               cd /home/ubuntu/flatris
               git pull origin main
             else
-              git clone https://github.com/${{ secrets.GITHUB_REPO }} /home/ubuntu/flatris
+              git clone https://github.com/kartheek-lenka/flatris /home/ubuntu/flatris
               cd /home/ubuntu/flatris
             fi
             
