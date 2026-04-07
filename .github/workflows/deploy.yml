@@ -9,12 +9,12 @@ on:
 env:
   AWS_REGION: ap-south-1
   TF_VERSION: 1.6.0
-  NODE_VERSION: 18   # ✅ Updated
+  NODE_VERSION: 18
 
 jobs:
 
   # ─────────────────────────────────────────
-  # JOB 1: Build
+  # BUILD
   # ─────────────────────────────────────────
   build:
     runs-on: ubuntu-latest
@@ -45,10 +45,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: flatris-build
-          path: web/build/   # ✅ FIXED
+          path: web/.next/
 
   # ─────────────────────────────────────────
-  # JOB 2: Terraform
+  # TERRAFORM
   # ─────────────────────────────────────────
   terraform:
     runs-on: ubuntu-latest
@@ -91,16 +91,14 @@ jobs:
         id: tf
         run: |
           echo "bucket=$(terraform output -raw s3_bucket_name)" >> $GITHUB_OUTPUT
-          echo "cf_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
           echo "url=$(terraform output -raw cloudfront_url)" >> $GITHUB_OUTPUT
 
     outputs:
       bucket: ${{ steps.tf.outputs.bucket }}
-      cf_id: ${{ steps.tf.outputs.cf_id }}
       url: ${{ steps.tf.outputs.url }}
 
   # ─────────────────────────────────────────
-  # JOB 3: Deploy
+  # DEPLOY
   # ─────────────────────────────────────────
   deploy:
     runs-on: ubuntu-latest
@@ -124,12 +122,7 @@ jobs:
         run: |
           aws s3 sync build/ s3://${{ needs.terraform.outputs.bucket }} --delete
 
-      - name: Invalidate CloudFront
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id ${{ needs.terraform.outputs.cf_id }} \
-            --paths "/*"
-
       - name: Show URL
         run: |
-          echo "🎮 Live URL: ${{ needs.terraform.outputs.url }}"
+          echo "🎮 Game URL:"
+          echo "${{ needs.terraform.outputs.url }}"
