@@ -44,7 +44,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: flatris-build
-          path: build/
+          path: web/.next/
           retention-days: 1
 
   # ─────────────────────────────────────────
@@ -124,7 +124,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: flatris-build
-          path: build/
+          path: web/.next/
 
       - name: Sync build files to S3
         run: |
