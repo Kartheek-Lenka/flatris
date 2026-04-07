@@ -37,6 +37,7 @@ jobs:
           cd web
           yarn install
           yarn build
+          yarn export
         env:
           CI: false
           NODE_OPTIONS: --openssl-legacy-provider
@@ -45,7 +46,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: flatris-build
-          path: web/.next/
+          path: web/out/
 
   # ─────────────────────────────────────────
   # TERRAFORM
