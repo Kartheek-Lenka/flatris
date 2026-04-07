@@ -12,7 +12,7 @@ terraform {
   backend "s3" {
     bucket = "flatris-tfstate-271443695313" # change this
     key    = "flatris/terraform.tfstate"
-    region = "us-east-1"
+    region = "ap-south-1"
   }
 }
 
